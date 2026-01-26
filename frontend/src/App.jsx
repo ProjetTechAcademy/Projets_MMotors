@@ -6,116 +6,83 @@ function App() {
   const [nom, setNom] = useState('');
   const [email, setEmail] = useState('');
   const [userEmail, setUserEmail] = useState(null);
-  const [statut, setStatut] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [tousLesDossiers, setTousLesDossiers] = useState([]);
+  
+  // Champs pour ajouter un véhicule
+  const [nVMarque, setNVMarque] = useState('');
+  const [nVModele, setNVModele] = useState('');
 
-  useEffect(() => {
+  const chargerDonnees = () => {
     fetch('http://localhost:8000/vehicules').then(res => res.json()).then(data => setVehicules(data.resultat));
-  }, []);
+    if(isAdmin) fetch('http://localhost:8000/admin/dossiers').then(res => res.json()).then(data => setTousLesDossiers(data.dossiers));
+  };
 
-  const gererInscription = (e) => {
+  useEffect(() => { chargerDonnees(); }, [isAdmin]);
+
+  const ajouterVoiture = (e) => {
     e.preventDefault();
-    fetch('http://localhost:8000/inscription', {
+    fetch('http://localhost:8000/admin/vehicules', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ nom, email })
-    })
-    .then(res => res.json())
-    .then(data => {
-      setUserEmail(email);
-      setStatut(data.client.statut_dossier);
-    });
+      body: JSON.stringify({ marque: nVMarque, modele: nVModele, type: 'vente', prix: 50000 })
+    }).then(() => { chargerDonnees(); setNVMarque(''); setNVModele(''); });
   };
 
-  const chargerDossiersAdmin = () => {
-    fetch('http://localhost:8000/admin/dossiers')
-      .then(res => res.json())
-      .then(data => setTousLesDossiers(data.dossiers));
-  };
-
-  const validerDossier = (emailClient) => {
-    fetch(`http://localhost:8000/admin/valider/${emailClient}`, { method: 'POST' })
-      .then(() => chargerDossiersAdmin());
+  const basculerVoiture = (id) => {
+    fetch(`http://localhost:8000/admin/basculer/${id}`, { method: 'POST' }).then(() => chargerDonnees());
   };
 
   return (
     <div className="App">
-      <header style={{ padding: '20px', backgroundColor: '#111', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <header style={{ padding: '20px', backgroundColor: '#111', color: 'white', display: 'flex', justifyContent: 'space-between' }}>
         <h1>🏎️ Moteurs M</h1>
-        <button onClick={() => { setIsAdmin(!isAdmin); if(!isAdmin) chargerDossiersAdmin(); }} style={{ padding: '10px', cursor: 'pointer' }}>
-          {isAdmin ? "Retour Vue Client" : "Accès Admin 🔐"}
-        </button>
+        <button onClick={() => setIsAdmin(!isAdmin)} style={{ cursor: 'pointer' }}>{isAdmin ? "Vue Client" : "Admin 🔐"}</button>
       </header>
 
       <div style={{ maxWidth: '1000px', margin: '20px auto', padding: '20px' }}>
         
         {isAdmin ? (
-          /* --- VUE ADMINISTRATEUR --- */
+          /* --- VUE ADMIN --- */
           <section>
-            <h2>Tableau de Bord Administrateur</h2>
-            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
-              <thead>
-                <tr style={{ backgroundColor: '#eee' }}>
-                  <th style={tdStyle}>Nom</th>
-                  <th style={tdStyle}>Email</th>
-                  <th style={tdStyle}>Statut Actuel</th>
-                  <th style={tdStyle}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tousLesDossiers.map(d => (
-                  <tr key={d.email}>
-                    <td style={tdStyle}>{d.nom}</td>
-                    <td style={tdStyle}>{d.email}</td>
-                    <td style={tdStyle}>{d.statut_dossier}</td>
-                    <td style={tdStyle}>
-                      <button onClick={() => validerDossier(d.email)} style={{ backgroundColor: 'green', color: 'white', padding: '5px' }}>Valider</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ) : (
-          /* --- VUE CLIENT --- */
-          <>
-            {!userEmail ? (
-              <section style={sectionStyle}>
-                <h2>Inscription Showroom Prestige</h2>
-                <form onSubmit={gererInscription}>
-                  <input type="text" placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} style={inputStyle} required />
-                  <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
-                  <button type="submit" style={btnStyle}>Accéder</button>
-                </form>
-              </section>
-            ) : (
-              <section style={{ ...sectionStyle, backgroundColor: '#f0f7ff' }}>
-                <h2>👋 Bonjour {nom} !</h2>
-                <p><b>Votre Statut :</b> {statut}</p>
-              </section>
-            )}
+            <h2>Gestion du Stock</h2>
+            <form onSubmit={ajouterVoiture} style={{ marginBottom: '30px', border: '1px solid #ccc', padding: '15px' }}>
+              <h3>Ajouter un véhicule de luxe</h3>
+              <input type="text" placeholder="Marque" value={nVMarque} onChange={e => setNVMarque(e.target.value)} required />
+              <input type="text" placeholder="Modèle" value={nVModele} onChange={e => setNVModele(e.target.value)} required />
+              <button type="submit">Ajouter au stock</button>
+            </form>
 
-            <h2>Notre Showroom</h2>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
+            <h3>Catalogue & Bascule</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
               {vehicules.map(v => (
-                <div key={v.id} style={cardStyle}>
-                  <h3>{v.marque} {v.modele}</h3>
-                  <p>{v.prix || v.loyer} €</p>
+                <div key={v.id} style={{ border: '1px solid #ddd', padding: '10px', width: '200px' }}>
+                  <p><b>{v.marque} {v.modele}</b></p>
+                  <p>Type: {v.type}</p>
+                  <button onClick={() => basculerVoiture(v.id)} style={{ backgroundColor: '#ff9800', color: 'white' }}>Basculer Location/Vente</button>
                 </div>
               ))}
             </div>
-          </>
+          </section>
+        ) : (
+          /* --- VUE CLIENT --- */
+          <section>
+             <h2>Showroom de Prestige</h2>
+             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+              {vehicules.map(v => (
+                <div key={v.id} style={{ border: '1px solid #eee', padding: '20px', borderRadius: '15px', width: '220px', textAlign: 'center' }}>
+                  <h3>{v.marque}</h3>
+                  <p>{v.modele}</p>
+                  <p style={{ color: 'blue' }}>{v.type === 'vente' ? 'À Vendre' : 'En Location'}</p>
+                  <p><b>{v.prix || v.loyer} €</b></p>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </div>
   )
 }
-
-const sectionStyle = { border: '1px solid #ddd', padding: '20px', borderRadius: '15px', marginBottom: '20px' };
-const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px' };
-const btnStyle = { width: '100%', padding: '10px', backgroundColor: '#111', color: 'white' };
-const cardStyle = { border: '1px solid #eee', padding: '15px', borderRadius: '10px', width: '200px', textAlign: 'center' };
-const tdStyle = { border: '1px solid #ddd', padding: '10px', textAlign: 'left' };
 
 export default App

@@ -1,8 +1,30 @@
-from fastapi import FastAPI, Body, UploadFile, File
+from fastapi import FastAPI, Body, UploadFile, File, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional, List
+from sqlalchemy import create_engine, Column, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 
-app = FastAPI(title="M-Motors API - Back-Office")
+# 1. CONNEXION À LA BASE DE DONNÉES
+# On utilise l'adresse standard de Postgres sur ton Mac
+SQLALCHEMY_DATABASE_URL = "postgresql://postgres@localhost/mmotors"
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# 2. DÉFINITION DE LA TABLE "VEHICULE"
+class VehiculeDB(Base):
+    __tablename__ = "vehicules"
+    id = Column(Integer, primary_key=True, index=True)
+    marque = Column(String)
+    modele = Column(String)
+    type = Column(String) # vente ou location
+    prix = Column(Integer, nullable=True)
+    loyer = Column(Integer, nullable=True)
+
+# On demande à Python de créer la table dans Postgres
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="M-Motors - Mode PostgreSQL")
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,59 +34,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- NOS DONNÉES ---
-VEHICULES = [
-    {"id": 1, "marque": "Porsche", "modele": "911 Carrera", "type": "vente", "prix": 125000},
-    {"id": 2, "marque": "Ferrari", "modele": "F8 Tributo", "type": "location", "loyer": 3500},
-    {"id": 3, "marque": "Lamborghini", "modele": "Urus", "type": "location", "loyer": 4200},
-    {"id": 4, "marque": "Range Rover", "modele": "Autobiography", "type": "vente", "prix": 155000},
-]
+# Fonction pour obtenir l'accès à la base
+def get_db():
+    db = SessionLocal()
+    try: yield db
+    finally: db.close()
 
-UTILISATEURS = {} 
-
-# --- ROUTES CLIENTS ---
+# --- ROUTES MISES À JOUR ---
 
 @app.get("/vehicules")
-def lister_vehicules():
-    return {"resultat": VEHICULES}
+def lister_vehicules(db: Session = Depends(get_db)):
+    # On va chercher les voitures RÉELLES dans Postgres
+    return {"resultat": db.query(VehiculeDB).all()}
+
+@app.post("/admin/vehicules")
+def ajouter_vehicule(v: dict = Body(...), db: Session = Depends(get_db)):
+    nouveau = VehiculeDB(**v)
+    db.add(nouveau)
+    db.commit()
+    return {"message": "Enregistré dans PostgreSQL !"}
 
 @app.post("/inscription")
 def inscrire_client(client: dict = Body(...)):
-    email = client.get("email")
-    UTILISATEURS[email] = {
-        "nom": client.get("nom"),
-        "email": email,
-        "statut_dossier": "En cours de vérification 🔍",
-        "documents": []
-    }
-    return {"message": "Bienvenue chez Moteurs M !", "client": UTILISATEURS[email]}
-
-@app.post("/deposer-dossier")
-async def deposer_dossier(email: str, file: UploadFile = File(...)):
-    if email in UTILISATEURS:
-        UTILISATEURS[email]["documents"].append(file.filename)
-        UTILISATEURS[email]["statut_dossier"] = "Documents reçus - Analyse en cours 📑"
-        return {"message": f"Document '{file.filename}' reçu !"}
-    return {"message": "Email non reconnu."}
-
-@app.get("/suivi/{email}")
-def suivi_dossier(email: str):
-    client = UTILISATEURS.get(email)
-    if client:
-        return client
-    return {"message": "Aucun dossier trouvé."}
-
-# --- ROUTES ADMINISTRATEUR (NOUVEAU) ---
-
-@app.get("/admin/dossiers")
-def lister_tous_les_dossiers():
-    """Permet à l'admin de voir tout le monde."""
-    return {"dossiers": list(UTILISATEURS.values())}
-
-@app.post("/admin/valider/{email}")
-def valider_dossier(email: str):
-    """Permet à l'admin de valider un dossier spécifique."""
-    if email in UTILISATEURS:
-        UTILISATEURS[email]["statut_dossier"] = "Dossier Validé ✅ - Véhicule prêt !"
-        return {"message": f"Dossier de {email} validé avec succès."}
-    return {"message": "Erreur : Client introuvable."}
+    # Pour l'instant on garde les clients en mémoire pour simplifier l'étape
+    return {"message": "Bienvenue !", "client": client}
