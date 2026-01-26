@@ -7,7 +7,8 @@ function App() {
   const [email, setEmail] = useState('');
   const [userEmail, setUserEmail] = useState(null);
   const [statut, setStatut] = useState('');
-  const [message, setMessage] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [tousLesDossiers, setTousLesDossiers] = useState([]);
 
   useEffect(() => {
     fetch('http://localhost:8000/vehicules').then(res => res.json()).then(data => setVehicules(data.resultat));
@@ -22,62 +23,90 @@ function App() {
     })
     .then(res => res.json())
     .then(data => {
-      setMessage(data.message);
-      setUserEmail(email); // On garde l'email pour le suivi
+      setUserEmail(email);
       setStatut(data.client.statut_dossier);
     });
   };
 
-  const gererUpload = async (e) => {
-    const file = e.target.files[0];
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    await fetch(`http://localhost:8000/deposer-dossier?email=${userEmail}`, { method: 'POST', body: formData });
-    
-    // On rafraîchit le statut
-    const res = await fetch(`http://localhost:8000/suivi/${userEmail}`);
-    const data = await res.json();
-    setStatut(data.statut);
+  const chargerDossiersAdmin = () => {
+    fetch('http://localhost:8000/admin/dossiers')
+      .then(res => res.json())
+      .then(data => setTousLesDossiers(data.dossiers));
+  };
+
+  const validerDossier = (emailClient) => {
+    fetch(`http://localhost:8000/admin/valider/${emailClient}`, { method: 'POST' })
+      .then(() => chargerDossiersAdmin());
   };
 
   return (
     <div className="App">
-      <header style={{ textAlign: 'center', padding: '40px', backgroundColor: '#111', color: 'white' }}>
-        <h1>🏎️ Moteurs M - Espace Client</h1>
+      <header style={{ padding: '20px', backgroundColor: '#111', color: 'white', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>🏎️ Moteurs M</h1>
+        <button onClick={() => { setIsAdmin(!isAdmin); if(!isAdmin) chargerDossiersAdmin(); }} style={{ padding: '10px', cursor: 'pointer' }}>
+          {isAdmin ? "Retour Vue Client" : "Accès Admin 🔐"}
+        </button>
       </header>
 
-      <div style={{ maxWidth: '900px', margin: '20px auto', padding: '20px' }}>
+      <div style={{ maxWidth: '1000px', margin: '20px auto', padding: '20px' }}>
         
-        {!userEmail ? (
-          <section style={sectionStyle}>
-            <h2>1. Inscription pour accès au Showroom</h2>
-            <form onSubmit={gererInscription}>
-              <input type="text" placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} style={inputStyle} required />
-              <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
-              <button type="submit" style={btnStyle}>Accéder à mon espace</button>
-            </form>
+        {isAdmin ? (
+          /* --- VUE ADMINISTRATEUR --- */
+          <section>
+            <h2>Tableau de Bord Administrateur</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
+              <thead>
+                <tr style={{ backgroundColor: '#eee' }}>
+                  <th style={tdStyle}>Nom</th>
+                  <th style={tdStyle}>Email</th>
+                  <th style={tdStyle}>Statut Actuel</th>
+                  <th style={tdStyle}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tousLesDossiers.map(d => (
+                  <tr key={d.email}>
+                    <td style={tdStyle}>{d.nom}</td>
+                    <td style={tdStyle}>{d.email}</td>
+                    <td style={tdStyle}>{d.statut_dossier}</td>
+                    <td style={tdStyle}>
+                      <button onClick={() => validerDossier(d.email)} style={{ backgroundColor: 'green', color: 'white', padding: '5px' }}>Valider</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </section>
         ) : (
-          <section style={{ ...sectionStyle, backgroundColor: '#f0f7ff', border: '2px solid #007bff' }}>
-            <h2>👋 Bonjour {nom} !</h2>
-            <p><b>Statut de votre dossier :</b> <span style={{fontSize: '1.2em'}}>{statut}</span></p>
-            <hr />
-            <p>Ajouter un document à votre dossier :</p>
-            <input type="file" onChange={gererUpload} />
-          </section>
-        )}
+          /* --- VUE CLIENT --- */
+          <>
+            {!userEmail ? (
+              <section style={sectionStyle}>
+                <h2>Inscription Showroom Prestige</h2>
+                <form onSubmit={gererInscription}>
+                  <input type="text" placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} style={inputStyle} required />
+                  <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
+                  <button type="submit" style={btnStyle}>Accéder</button>
+                </form>
+              </section>
+            ) : (
+              <section style={{ ...sectionStyle, backgroundColor: '#f0f7ff' }}>
+                <h2>👋 Bonjour {nom} !</h2>
+                <p><b>Votre Statut :</b> {statut}</p>
+              </section>
+            )}
 
-        <h2>Showroom Prestige</h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', justifyContent: 'center' }}>
-          {vehicules.map(v => (
-            <div key={v.id} style={cardStyle}>
-              <h3>{v.marque}</h3>
-              <p>{v.modele}</p>
-              <p><b>{v.prix || v.loyer} €</b></p>
+            <h2>Notre Showroom</h2>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px' }}>
+              {vehicules.map(v => (
+                <div key={v.id} style={cardStyle}>
+                  <h3>{v.marque} {v.modele}</h3>
+                  <p>{v.prix || v.loyer} €</p>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </>
+        )}
       </div>
     </div>
   )
@@ -85,7 +114,8 @@ function App() {
 
 const sectionStyle = { border: '1px solid #ddd', padding: '20px', borderRadius: '15px', marginBottom: '20px' };
 const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px' };
-const btnStyle = { width: '100%', padding: '10px', backgroundColor: '#111', color: 'white', cursor: 'pointer' };
-const cardStyle = { border: '1px solid #eee', padding: '15px', borderRadius: '10px', width: '180px', textAlign: 'center' };
+const btnStyle = { width: '100%', padding: '10px', backgroundColor: '#111', color: 'white' };
+const cardStyle = { border: '1px solid #eee', padding: '15px', borderRadius: '10px', width: '200px', textAlign: 'center' };
+const tdStyle = { border: '1px solid #ddd', padding: '10px', textAlign: 'left' };
 
 export default App

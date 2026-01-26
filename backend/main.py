@@ -2,7 +2,7 @@ from fastapi import FastAPI, Body, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List
 
-app = FastAPI(title="M-Motors API - Espace Client")
+app = FastAPI(title="M-Motors API - Back-Office")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,8 +20,9 @@ VEHICULES = [
     {"id": 4, "marque": "Range Rover", "modele": "Autobiography", "type": "vente", "prix": 155000},
 ]
 
-# Ici, on stocke les clients avec un statut par défaut
-UTILISATEURS = {} # On utilise un dictionnaire pour trouver le client par son email
+UTILISATEURS = {} 
+
+# --- ROUTES CLIENTS ---
 
 @app.get("/vehicules")
 def lister_vehicules():
@@ -30,7 +31,6 @@ def lister_vehicules():
 @app.post("/inscription")
 def inscrire_client(client: dict = Body(...)):
     email = client.get("email")
-    # On enregistre le client avec un statut "En attente"
     UTILISATEURS[email] = {
         "nom": client.get("nom"),
         "email": email,
@@ -43,15 +43,28 @@ def inscrire_client(client: dict = Body(...)):
 async def deposer_dossier(email: str, file: UploadFile = File(...)):
     if email in UTILISATEURS:
         UTILISATEURS[email]["documents"].append(file.filename)
-        # On met à jour le statut quand un document est reçu
         UTILISATEURS[email]["statut_dossier"] = "Documents reçus - Analyse en cours 📑"
-        return {"message": f"Document '{file.filename}' reçu pour {email} !"}
+        return {"message": f"Document '{file.filename}' reçu !"}
     return {"message": "Email non reconnu."}
 
 @app.get("/suivi/{email}")
 def suivi_dossier(email: str):
-    """Permet au client de voir son statut en temps réel."""
     client = UTILISATEURS.get(email)
     if client:
-        return {"statut": client["statut_dossier"], "nom": client["nom"]}
-    return {"message": "Aucun dossier trouvé pour cet email."}
+        return client
+    return {"message": "Aucun dossier trouvé."}
+
+# --- ROUTES ADMINISTRATEUR (NOUVEAU) ---
+
+@app.get("/admin/dossiers")
+def lister_tous_les_dossiers():
+    """Permet à l'admin de voir tout le monde."""
+    return {"dossiers": list(UTILISATEURS.values())}
+
+@app.post("/admin/valider/{email}")
+def valider_dossier(email: str):
+    """Permet à l'admin de valider un dossier spécifique."""
+    if email in UTILISATEURS:
+        UTILISATEURS[email]["statut_dossier"] = "Dossier Validé ✅ - Véhicule prêt !"
+        return {"message": f"Dossier de {email} validé avec succès."}
+    return {"message": "Erreur : Client introuvable."}
