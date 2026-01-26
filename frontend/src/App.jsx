@@ -5,13 +5,12 @@ function App() {
   const [vehicules, setVehicules] = useState([]);
   const [nom, setNom] = useState('');
   const [email, setEmail] = useState('');
+  const [userEmail, setUserEmail] = useState(null);
+  const [statut, setStatut] = useState('');
   const [message, setMessage] = useState('');
-  const [uploadStatus, setUploadStatus] = useState('');
 
   useEffect(() => {
-    fetch('http://localhost:8000/vehicules')
-      .then(res => res.json())
-      .then(data => setVehicules(data.resultat));
+    fetch('http://localhost:8000/vehicules').then(res => res.json()).then(data => setVehicules(data.resultat));
   }, []);
 
   const gererInscription = (e) => {
@@ -24,7 +23,8 @@ function App() {
     .then(res => res.json())
     .then(data => {
       setMessage(data.message);
-      setNom(''); setEmail('');
+      setUserEmail(email); // On garde l'email pour le suivi
+      setStatut(data.client.statut_dossier);
     });
   };
 
@@ -32,55 +32,49 @@ function App() {
     const file = e.target.files[0];
     const formData = new FormData();
     formData.append('file', file);
-
-    const res = await fetch('http://localhost:8000/deposer-dossier', {
-      method: 'POST',
-      body: formData,
-    });
+    
+    await fetch(`http://localhost:8000/deposer-dossier?email=${userEmail}`, { method: 'POST', body: formData });
+    
+    // On rafraîchit le statut
+    const res = await fetch(`http://localhost:8000/suivi/${userEmail}`);
     const data = await res.json();
-    setUploadStatus(data.message);
+    setStatut(data.statut);
   };
 
   return (
-    <div className="App" style={{ fontFamily: 'Arial, sans-serif', color: '#333' }}>
-      <header style={{ textAlign: 'center', padding: '50px 0', backgroundColor: '#1a1a1a', color: 'white' }}>
-        <h1>🏎️ Moteurs M</h1>
-        <p style={{ letterSpacing: '2px', textTransform: 'uppercase' }}>L'Excellence Automobile - Achat & LLD</p>
+    <div className="App">
+      <header style={{ textAlign: 'center', padding: '40px', backgroundColor: '#111', color: 'white' }}>
+        <h1>🏎️ Moteurs M - Espace Client</h1>
       </header>
 
-      <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '20px' }}>
+      <div style={{ maxWidth: '900px', margin: '20px auto', padding: '20px' }}>
         
-        {/* SECTION INSCRIPTION & DOSSIER */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px', marginBottom: '50px' }}>
-          <section style={{ border: '1px solid #ddd', padding: '20px', borderRadius: '15px' }}>
-            <h2>1. Devenir Membre</h2>
+        {!userEmail ? (
+          <section style={sectionStyle}>
+            <h2>1. Inscription pour accès au Showroom</h2>
             <form onSubmit={gererInscription}>
-              <input type="text" placeholder="Nom complet" value={nom} onChange={(e) => setNom(e.target.value)} style={inputStyle} required />
+              <input type="text" placeholder="Nom" value={nom} onChange={(e) => setNom(e.target.value)} style={inputStyle} required />
               <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} required />
-              <button type="submit" style={btnStyle}>Valider l'adhésion</button>
+              <button type="submit" style={btnStyle}>Accéder à mon espace</button>
             </form>
-            {message && <p style={{ color: '#d4af37' }}><b>{message}</b></p>}
           </section>
-
-          <section style={{ border: '1px solid #ddd', padding: '20px', borderRadius: '15px', backgroundColor: '#f9f9f9' }}>
-            <h2>2. Déposer mon Dossier</h2>
-            <p style={{ fontSize: '0.9em' }}>Téléchargez vos pièces justificatives (PDF, JPG).</p>
-            <input type="file" onChange={gererUpload} style={{ marginTop: '10px' }} />
-            {uploadStatus && <p style={{ color: 'green', marginTop: '10px' }}>✓ {uploadStatus}</p>}
+        ) : (
+          <section style={{ ...sectionStyle, backgroundColor: '#f0f7ff', border: '2px solid #007bff' }}>
+            <h2>👋 Bonjour {nom} !</h2>
+            <p><b>Statut de votre dossier :</b> <span style={{fontSize: '1.2em'}}>{statut}</span></p>
+            <hr />
+            <p>Ajouter un document à votre dossier :</p>
+            <input type="file" onChange={gererUpload} />
           </section>
-        </div>
+        )}
 
-        {/* SECTION CATALOGUE DE LUXE */}
-        <h2 style={{ textAlign: 'center', marginBottom: '30px' }}>Le Showroom de Prestige</h2>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'center' }}>
+        <h2>Showroom Prestige</h2>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', justifyContent: 'center' }}>
           {vehicules.map(v => (
             <div key={v.id} style={cardStyle}>
-              <h3 style={{ margin: '0' }}>{v.marque}</h3>
-              <p style={{ color: '#666', fontWeight: 'bold' }}>{v.modele}</p>
-              <div style={{ borderTop: '1px solid #eee', marginTop: '10px', paddingTop: '10px' }}>
-                <span style={{ fontSize: '0.8em', backgroundColor: '#eee', padding: '2px 8px', borderRadius: '10px' }}>{v.type}</span>
-                <p style={{ fontSize: '1.2em', fontWeight: 'bold', color: '#1a1a1a' }}>{v.prix || v.loyer} € {v.type === 'location' ? '/mois' : ''}</p>
-              </div>
+              <h3>{v.marque}</h3>
+              <p>{v.modele}</p>
+              <p><b>{v.prix || v.loyer} €</b></p>
             </div>
           ))}
         </div>
@@ -89,9 +83,9 @@ function App() {
   )
 }
 
-// Styles rapides pour le côté "Luxe"
-const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px', borderRadius: '5px', border: '1px solid #ccc' };
-const btnStyle = { width: '100%', padding: '10px', backgroundColor: '#1a1a1a', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' };
-const cardStyle = { border: '1px solid #eee', padding: '20px', borderRadius: '15px', width: '220px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' };
+const sectionStyle = { border: '1px solid #ddd', padding: '20px', borderRadius: '15px', marginBottom: '20px' };
+const inputStyle = { width: '100%', padding: '10px', marginBottom: '10px' };
+const btnStyle = { width: '100%', padding: '10px', backgroundColor: '#111', color: 'white', cursor: 'pointer' };
+const cardStyle = { border: '1px solid #eee', padding: '15px', borderRadius: '10px', width: '180px', textAlign: 'center' };
 
 export default App
